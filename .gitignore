@@ -1,0 +1,29 @@
+# Python / editor
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
+
+# Logs
+logs/
+*.out
+*.pid
+
+# Model artifacts
+**/*.pt
+**/trainer_logs/
+
+# Chemprop / run artifacts
+results/chemprop_multi/
+results/chemprop_single/
+results/cv5x5/chemprop_multi/
+results/cv5x5/chemprop_single/
+results/cv5x5_hlm_mlm/chemprop_multi/
+results/cv5x5_hlm_mlm/chemprop_single/
+
+# Optional: prediction dumps
+**/predictions.csv
+**/val_predictions.csv
+results/rf_val_predictions_seed0.csv
+results/cv5x5/rf_ecfp4/val_predictions_iter*_fold*.csv
+results/cv5x5_hlm_mlm/rf_ecfp4/val_predictions_iter*_fold*.csv
+results/cv5x5_rf/rf_val_predictions_iter*_fold*_seed*.csv
