@@ -122,7 +122,7 @@ def sanity_check_splits(df, scaffolds, splits_df, n_folds, n_repeats):
     n_unique_scaffolds = len(set(scaffolds))
 
     print("\n==============================")
-    print("Sanity check: scaffold CV 5x5")
+    print("Sanity check: scaffold outer CV 5x5")
     print("==============================")
     print("N molecules:", N)
     print("Unique scaffolds:", n_unique_scaffolds)
@@ -162,28 +162,28 @@ def sanity_check_splits(df, scaffolds, splits_df, n_folds, n_repeats):
     # }
     # we can just do rowid_to_scaffold[137] to get the scaffold for that row_id
 
-    print("\nValidation fold sizes (rows and % of dataset):")
+    print("\nOuter test fold sizes (rows and % of dataset):")
     for cv_iter in range(n_repeats):
         for fold in range(n_folds):
-            val_ids = splits_df[
+            test_ids = splits_df[
                 (splits_df["cv_iter"] == cv_iter) & (splits_df["fold"] == fold)
             ]["row_id"].tolist()
 
-            val_size = len(val_ids)
-            val_pct = 100.0 * val_size / N
-            val_scaffolds = set(rowid_to_scaffold[rid] for rid in val_ids)
+            test_size = len(test_ids)
+            test_pct = 100.0 * test_size / N
+            test_scaffolds = set(rowid_to_scaffold[rid] for rid in test_ids)
 
             train_ids = splits_df[splits_df["cv_iter"] == cv_iter]
             train_ids = train_ids[train_ids["fold"] != fold]["row_id"].tolist()
             train_scaffolds = set(rowid_to_scaffold[rid] for rid in train_ids)
 
-            overlap = val_scaffolds.intersection(train_scaffolds)
+            overlap = test_scaffolds.intersection(train_scaffolds)
 
             print(
                 f"  repeat {cv_iter}, fold {fold}: "
-                f"val_rows={val_size} ({val_pct:.1f}%), "
-                f"val_scaffolds={len(val_scaffolds)}, "
-                f"scaffold_overlap_with_train={len(overlap)}"
+                f"test_rows={test_size} ({test_pct:.1f}%), "
+                f"test_scaffolds={len(test_scaffolds)}, "
+                f"scaffold_overlap_with_outer_train={len(overlap)}"
             )
 
             if len(overlap) != 0:
@@ -207,20 +207,119 @@ def sanity_check_splits(df, scaffolds, splits_df, n_folds, n_repeats):
             print(f"  fold {fold}: repeat0 vs repeat{cv_iter} Jaccard={jaccard:.3f}")
 
 
-def write_cv_fold_csvs(input_csv, splits_df, out_root, n_repeats, n_folds):
+def sanity_check_written_fold_csvs(out_root, n_repeats, n_folds):
+    print("\n==============================")
+    print("Sanity check: written train/val/test fold CSVs")
+    print("==============================")
+
+    for cv_iter in range(n_repeats):
+        for fold in range(n_folds):
+            path = os.path.join(out_root, f"iter_{cv_iter}", f"fold_{fold}.csv")
+            df = pd.read_csv(path)
+
+            split_counts = df["split"].value_counts().to_dict()
+            print(f"iter {cv_iter} fold {fold}: {split_counts}")
+
+            # Every row should have exactly one of train/val/test
+            bad_labels = set(df["split"].unique()) - {"train", "val", "test"}
+            if bad_labels:
+                raise ValueError(
+                    f"Unexpected split labels in {path}: {sorted(bad_labels)}"
+                )
+
+            # No row_id duplication
+            if df["row_id"].duplicated().any():
+                raise ValueError(f"Duplicated row_id found in {path}")
+
+            # Check inner scaffold separation: val scaffolds should not overlap train scaffolds
+            scaffolds = [murcko_scaffold(smi) for smi in df["SMILES"].tolist()]
+            df = df.copy()
+            df["scaffold"] = scaffolds
+
+            train_scaff = set(df.loc[df["split"] == "train", "scaffold"])
+            val_scaff = set(df.loc[df["split"] == "val", "scaffold"])
+            test_scaff = set(df.loc[df["split"] == "test", "scaffold"])
+
+            if train_scaff.intersection(val_scaff):
+                raise ValueError(
+                    f"Inner train/val scaffold overlap in iter {cv_iter} fold {fold}"
+                )
+
+            if test_scaff.intersection(val_scaff):
+                raise ValueError(
+                    f"Val/test scaffold overlap in iter {cv_iter} fold {fold}"
+                )
+
+            if test_scaff.intersection(train_scaff):
+                raise ValueError(
+                    f"Train/test scaffold overlap in iter {cv_iter} fold {fold}"
+                )
+
+
+def assign_inner_scaffold_val_ids(
+    outer_train_df,
+    val_frac=0.20,
+    random_state=0,
+):
+    """
+    Split the outer-training rows into inner train/val by scaffold.
+
+    We keep whole scaffolds together and try to make the inner validation set
+    roughly val_frac of the outer-training pool.
+    """
+    work = outer_train_df.copy()
+
+    scaffold_to_rows = {}
+    for rid, scaff in zip(work["row_id"].tolist(), work["scaffold"].tolist()):
+        scaffold_to_rows.setdefault(scaff, []).append(rid)
+
+    scaffolds = sorted(scaffold_to_rows.keys())
+
+    # Shuffle scaffold order so different repeats/folds can differ reproducibly
+    scaff_df = pd.DataFrame({"scaffold": scaffolds})
+    scaff_df = scaff_df.sample(frac=1.0, random_state=random_state).reset_index(
+        drop=True
+    )
+    shuffled_scaffolds = scaff_df["scaffold"].tolist()
+
+    target_val_size = int(round(len(work) * val_frac))
+    val_ids = []
+    val_size = 0
+
+    # Greedy fill of the inner validation set using whole scaffolds
+    for scaff in shuffled_scaffolds:
+        scaffold_rows = scaffold_to_rows[scaff]
+        scaffold_size = len(scaffold_rows)
+
+        # If val is already at or above target, stop
+        if val_size >= target_val_size:
+            break
+
+        val_ids.extend(scaffold_rows)
+        val_size += scaffold_size
+
+    return sorted(val_ids)
+
+
+def write_cv_fold_csvs(
+    input_csv,
+    splits_df,
+    out_root,
+    n_repeats,
+    n_folds,
+    inner_val_frac=0.20,
+):
     """
     Write one CSV per (cv_iter, fold) containing the full dataset plus a 'split' column.
 
-    Chemprop CLI can then use:
-      --data-path <that_csv>
-      --splits-column split
-
-    split values are: 'train' or 'val'
+    split values are:
+      - 'train' : inner training rows
+      - 'val'   : inner validation rows used for early stopping
+      - 'test'  : outer held-out fold used for final scoring in that CV run
     """
     df = pd.read_csv(input_csv).copy()
-
-    # Ensure row_id matches the split generator convention
     df["row_id"] = list(range(len(df)))
+    df["scaffold"] = [murcko_scaffold(smi) for smi in df["SMILES"].tolist()]
 
     os.makedirs(out_root, exist_ok=True)
 
@@ -229,16 +328,48 @@ def write_cv_fold_csvs(input_csv, splits_df, out_root, n_repeats, n_folds):
         os.makedirs(iter_dir, exist_ok=True)
 
         for fold in range(n_folds):
-            val_ids = splits_df[
+            # Outer test fold = the old held-out fold from 5-fold CV
+            test_ids = splits_df[
                 (splits_df["cv_iter"] == cv_iter) & (splits_df["fold"] == fold)
             ]["row_id"].tolist()
+            test_id_set = set(test_ids)
 
-            out = df.copy()
+            # Outer training pool = everything not in outer test
+            outer_train_df = df[~df["row_id"].isin(test_id_set)].copy()
+
+            # Inner validation split is created ONLY from the outer training pool
+            # We vary the random_state by repeat and fold for reproducibility.
+            inner_seed = 10_000 * cv_iter + fold
+            val_ids = assign_inner_scaffold_val_ids(
+                outer_train_df,
+                val_frac=inner_val_frac,
+                random_state=inner_seed,
+            )
+            val_id_set = set(val_ids)
+
+            # Sanity: val and test must be disjoint
+            overlap = val_id_set.intersection(test_id_set)
+            if overlap:
+                raise ValueError(
+                    f"Inner val / outer test overlap found for iter {cv_iter}, fold {fold}"
+                )
+
+            out = df.drop(columns=["scaffold"]).copy()
             out["split"] = "train"
-            out.loc[out["row_id"].isin(val_ids), "split"] = "val"
+            out.loc[out["row_id"].isin(val_id_set), "split"] = "val"
+            out.loc[out["row_id"].isin(test_id_set), "split"] = "test"
 
             out_path = os.path.join(iter_dir, f"fold_{fold}.csv")
             out.to_csv(out_path, index=False)
+
+            n_train = (out["split"] == "train").sum()
+            n_val = (out["split"] == "val").sum()
+            n_test = (out["split"] == "test").sum()
+
+            print(
+                f"iter {cv_iter} fold {fold}: "
+                f"train={n_train} val={n_val} test={n_test}"
+            )
 
     print(f"Wrote per-fold CV CSVs under: {out_root}")
 
@@ -250,6 +381,7 @@ def main():
     ap.add_argument("--out_cv_root", required=True)
     ap.add_argument("--n_folds", type=int, required=True)
     ap.add_argument("--n_repeats", type=int, required=True)
+    ap.add_argument("--inner_val_frac", type=float, default=0.20)
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out_splits), exist_ok=True)
@@ -273,6 +405,13 @@ def main():
     write_cv_fold_csvs(
         args.input_csv,
         splits,
+        args.out_cv_root,
+        n_repeats=args.n_repeats,
+        n_folds=args.n_folds,
+        inner_val_frac=args.inner_val_frac,
+    )
+
+    sanity_check_written_fold_csvs(
         args.out_cv_root,
         n_repeats=args.n_repeats,
         n_folds=args.n_folds,
