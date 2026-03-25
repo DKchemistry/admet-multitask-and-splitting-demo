@@ -47,10 +47,10 @@ def fit_and_predict(train_path, test_path):
     print(hlm_pred_df.head())
     os.makedirs(RESULTS_DIR, exist_ok=True)
     hlm_pred_path = os.path.join(RESULTS_DIR, "hlm_predictions.csv")
-    hlm_pred_df.to_csv(hlm_pred_path)
-    print(f"Wrote f{hlm_pred_path}")
+    hlm_pred_df.to_csv(hlm_pred_path, index=False)
+    print(f"Wrote {hlm_pred_path}")
 
-    rmse = mean_squared_error(hlm, hlm_pred) ** 2
+    rmse = mean_squared_error(hlm, hlm_pred) ** 0.5
     mae = mean_absolute_error(hlm, hlm_pred)
     r2 = r2_score(hlm, hlm_pred)
     tau, tau_pvalue = kendalltau(hlm, hlm_pred)
@@ -82,11 +82,11 @@ def fit_and_predict(train_path, test_path):
     )
     print(mlm_pred_df.head())
     mlm_pred_path = os.path.join(RESULTS_DIR, "mlm_predictions.csv")
-    mlm_pred_df.to_csv(mlm_pred_path)
-    print(f"Wrote f{mlm_pred_path}")
+    mlm_pred_df.to_csv(mlm_pred_path, index=False)
+    print(f"Wrote {mlm_pred_path}")
 
     # Safe to overwrite as we wrote previous metrics to df
-    rmse = mean_squared_error(mlm, mlm_pred) ** 2
+    rmse = mean_squared_error(mlm, mlm_pred) ** 0.5
     mae = mean_absolute_error(mlm, mlm_pred)
     r2 = r2_score(mlm, mlm_pred)
     tau, tau_pvalue = kendalltau(mlm, mlm_pred)
@@ -108,9 +108,8 @@ def fit_and_predict(train_path, test_path):
     combined_metrics_df = pd.concat([hlm_metrics_df, mlm_metrics_df])
     print(combined_metrics_df)
 
-    os.makedirs(RESULTS_DIR, exist_ok=True)
     combined_metrics_path = os.path.join(RESULTS_DIR, "metrics_all_targets.csv")
-    combined_metrics_df.to_csv(combined_metrics_path)
+    combined_metrics_df.to_csv(combined_metrics_path, index=False)
     print(f"Wrote {combined_metrics_path}")
 
 def main(): 
