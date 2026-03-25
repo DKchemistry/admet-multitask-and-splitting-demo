@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TRAIN_DATA="data/processed/hlm_mlm_paired_train_temporal_80_20.csv"
-TEST_DATA="data/raw/hlm_mlm_test.csv"
-RESULTS_ROOT="results/hlm_mlm_true_test"
+TRAIN_DATA="data/processed/hlm_mlm_paired_train_log10_temporal_80_20.csv"
+TEST_DATA="data/processed/hlm_mlm_paired_log10_test.csv"
+RESULTS_ROOT="results/hlm_mlm_temporal_80_20_test"
 
 SMILES_COL="SMILES"
 HLM_COL="HLM CLint"
 MLM_COL="MLM CLint"
 
 SEED_START=0
-SEED_END=24
+SEED_END=4
 
 run_st_hlm() {
   export CUDA_VISIBLE_DEVICES="MIG-d2513014-4073-5b89-b98d-39651c1427c8"
@@ -190,7 +190,7 @@ run_st_fm_mlm() {
 }
 
 run_mt_fm() {
-  export CUDA_VISIBLE_DEVICES="MIG-435ac987-77ee-564b-9844-8d69355885d2"
+  export CUDA_VISIBLE_DEVICES="MIG-d6d882a2-eede-5cfc-8b94-a6f8c9097c31"
 
   for SEED in $(seq "${SEED_START}" "${SEED_END}"); do
     OUT_DIR="${RESULTS_ROOT}/chemprop_multi_foundation/hlm_mlm/seed_${SEED}"
