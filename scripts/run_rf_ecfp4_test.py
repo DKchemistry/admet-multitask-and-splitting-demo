@@ -12,6 +12,7 @@ RDLogger.DisableLog("rdApp.warning")
 TRAIN = "data/processed/hlm_mlm_paired_log10_train.csv"
 TEST = "data/processed/hlm_mlm_paired_log10_test.csv"
 RESULTS_DIR = "results/hlm_mlm_test_rf_ecfp4"
+NUM_SEEDS = 5
 
 def ecfp4_from_smiles(smiles_list, n_bits=2048):
     fps = []
@@ -23,7 +24,11 @@ def ecfp4_from_smiles(smiles_list, n_bits=2048):
 
     return fps
 
-def fit_and_predict(train_path, test_path):
+def fit_and_predict(train_path, test_path, seed):
+
+    # Paths for saving to seed directorings
+    seed_name = "seed_" + str(seed)
+    seed_dir = os.path.join(RESULTS_DIR, seed_name)
 
     # SMILES -> ECFP4
     train_df = pd.read_csv(train_path)
@@ -36,7 +41,7 @@ def fit_and_predict(train_path, test_path):
 
     # HLM CLint
     train_hlm = train_df["HLM CLint"].values.tolist()
-    regr_hlm = RandomForestRegressor(n_estimators=500, n_jobs=-1)
+    regr_hlm = RandomForestRegressor(n_estimators=500, n_jobs=-1, random_state=seed)
     regr_hlm.fit(train_fps, train_hlm)
     hlm_pred = regr_hlm.predict(test_fps)
 
@@ -45,8 +50,8 @@ def fit_and_predict(train_path, test_path):
 
     hlm_pred_df = pd.DataFrame({"SMILES":test_smiles, "HLM CLint": hlm, "HLM CLint pred": hlm_pred})
     print(hlm_pred_df.head())
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    hlm_pred_path = os.path.join(RESULTS_DIR, "hlm_predictions.csv")
+    os.makedirs(seed_dir, exist_ok=True)
+    hlm_pred_path = os.path.join(seed_dir, "hlm_predictions.csv")
     hlm_pred_df.to_csv(hlm_pred_path, index=False)
     print(f"Wrote {hlm_pred_path}")
 
@@ -70,7 +75,7 @@ def fit_and_predict(train_path, test_path):
 
     # MLM CLint
     train_mlm = train_df["MLM CLint"].values.tolist()
-    regr_mlm = RandomForestRegressor(n_estimators=500, n_jobs=-1)
+    regr_mlm = RandomForestRegressor(n_estimators=500, n_jobs=-1, random_state=seed)
     regr_mlm.fit(train_fps, train_mlm)
     mlm_pred = regr_mlm.predict(test_fps)
 
@@ -81,7 +86,7 @@ def fit_and_predict(train_path, test_path):
         {"SMILES": test_smiles, "MLM CLint": mlm, "MLM CLint pred": mlm_pred}
     )
     print(mlm_pred_df.head())
-    mlm_pred_path = os.path.join(RESULTS_DIR, "mlm_predictions.csv")
+    mlm_pred_path = os.path.join(seed_dir, "mlm_predictions.csv")
     mlm_pred_df.to_csv(mlm_pred_path, index=False)
     print(f"Wrote {mlm_pred_path}")
 
@@ -108,12 +113,17 @@ def fit_and_predict(train_path, test_path):
     combined_metrics_df = pd.concat([hlm_metrics_df, mlm_metrics_df])
     print(combined_metrics_df)
 
-    combined_metrics_path = os.path.join(RESULTS_DIR, "metrics_all_targets.csv")
+    combined_metrics_path = os.path.join(seed_dir, "metrics_all_targets.csv")
     combined_metrics_df.to_csv(combined_metrics_path, index=False)
     print(f"Wrote {combined_metrics_path}")
 
 def main(): 
-    fit_and_predict(train_path=TRAIN, test_path=TEST)
+    for seed in range(NUM_SEEDS):
+        print(f"Processing seed: {seed}...")
+        fit_and_predict(train_path=TRAIN, test_path=TEST, seed=seed)
+        print(f"Completed seed: {seed}"
+        )
+    print(f"Finished running {NUM_SEEDS} seeds.")
 
 if __name__ == "__main__":
     main()
