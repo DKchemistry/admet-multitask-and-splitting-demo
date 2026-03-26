@@ -9,6 +9,23 @@ RESULTS_CSVS = "results/hlm_mlm_test_rf_ecfp4/**/*lm_predictions.csv"
 TEST = "data/processed/hlm_mlm_paired_log10_test.csv"
 SUMMARY_DIR = "results/hlm_mlm_test_rf_ecfp4/summary"
 
+
+def compute_metrics(y_true, y_pred, target):
+    rmse = mean_squared_error(y_true, y_pred) ** 0.5
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    tau, tau_pvalue = kendalltau(y_true, y_pred)
+
+    return {
+        "target": target,
+        "rmse": rmse,
+        "mae": mae,
+        "r2": r2,
+        "kendall_tau": tau,
+        "kendall_tau_pvalue": tau_pvalue,
+    }
+
+
 truth_df = pd.read_csv(TEST)
 
 pred_csvs = []
@@ -70,13 +87,12 @@ for col in test_df.columns:
 # Now we can use the dict to group operations in pandas
 
 for keys in group_dict:
-    print(f"processing {group_dict[keys]}")
     ensemble_mean_col = str(keys)+"_ensemble_mean"
     ensemble_std_col = str(keys)+"_ensemble_std"
     test_df[ensemble_mean_col] = test_df[group_dict[keys]].mean(axis=1)
     test_df[ensemble_std_col] = test_df[group_dict[keys]].std(axis=1)
 
-# print(test_df.columns) # getting both mean and std cols 
+# print(test_df.columns) # getting both mean and std cols
 
 # Now we have our per_molecule_predictions dataframe
 os.makedirs(SUMMARY_DIR, exist_ok=True)
@@ -84,5 +100,27 @@ per_mol_pred_path = os.path.join(SUMMARY_DIR, "per_molecule_predictions.csv")
 test_df.to_csv(per_mol_pred_path, index=False)
 print(f"Wrote {per_mol_pred_path}")
 
-# Now we need the ensemble_metrics dataframe 
+# Now we need the ensemble_metrics dataframe
+# We could do this with a loop but its overkill
 
+hlm = test_df["HLM CLint"].values.tolist()
+mlm = test_df["MLM CLint"].values.tolist() 
+
+hlm_ens_pred = test_df["HLM CLint pred_ensemble_mean"].values.tolist()
+mlm_ens_pred = test_df["MLM CLint pred_ensemble_mean"].values.tolist() 
+
+hlm_metrics_dict = compute_metrics(hlm, hlm_ens_pred, target="HLM CLint")
+mlm_metrics_dict = compute_metrics(mlm, mlm_ens_pred, target = "MLM CLint")
+
+hlm_metrics_df = pd.DataFrame([hlm_metrics_dict])
+mlm_metrics_df = pd.DataFrame([mlm_metrics_dict])
+
+metrics_list = [hlm_metrics_df, mlm_metrics_df]
+
+combined_metrics = pd.concat(metrics_list)
+
+# print(combined_metrics) # 2rowsx6cols, looks good
+
+ens_met_path = os.path.join(SUMMARY_DIR, "ensemble_metrics.csv")
+combined_metrics.to_csv(ens_met_path, index=False)
+print(f"Wrote {ens_met_path}")
