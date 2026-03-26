@@ -74,8 +74,12 @@ def main():
         col_std_name = key + "_sdev"
         test_df[col_mean_name] = test_df[subset_cols].mean(axis=1)
         test_df[col_std_name] = test_df[subset_cols].std(axis=1)
-    
-    # print(test_df)
+
+    # Save per molecule predictions for seed and ensemble
+    os.makedirs(SUMMARY_DIR, exist_ok=True)
+    per_molecule_prediction_path = os.path.join(SUMMARY_DIR, "per_molecule_predictions.csv")
+    test_df.to_csv(per_molecule_prediction_path, index=False)
+    print(f"Wrote molecule level predictions to {per_molecule_prediction_path}")
 
     ensemble_metrics_dfs = []
     for col in test_df.columns:
@@ -130,10 +134,8 @@ def main():
             ensemble_metrics_dfs.append(mlm_metrics_df)
 
     ensemble_metrics_df = pd.concat(ensemble_metrics_dfs)
-    # print(ensemble_metrics_df)
 
     # Save ensemble metrics
-    os.makedirs(SUMMARY_DIR, exist_ok = True)
     ensemble_summary_path = os.path.join(SUMMARY_DIR, "ensemble_metrics.csv")
     ensemble_metrics_df.to_csv(ensemble_summary_path, index=False)
     print(f"Wrote ensemble metrics to {ensemble_summary_path}")
