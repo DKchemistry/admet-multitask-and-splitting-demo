@@ -12,15 +12,26 @@ SUMMARY_DIR = "results/hlm_mlm_test_rf_ecfp4/summary"
 
 
 def compute_metrics(y_true, y_pred, target):
-    rmse = mean_squared_error(y_true, y_pred) ** 0.5
     mae = mean_absolute_error(y_true, y_pred)
+    abs_errors = np.abs(y_true - y_pred)
+    mae_bootstrap = bootstrap((abs_errors,), mae_statistic, n_resamples=1000, confidence_level=0.95)
+
+    rmse = mean_squared_error(y_true, y_pred) ** 0.5
+    sq_errors = abs_errors ** 2
+    rmse_bootstrap = bootstrap(
+        (sq_errors,), rmse_statistic, n_resamples=1000, confidence_level=0.95
+    )
     r2 = r2_score(y_true, y_pred)
     tau, tau_pvalue = kendalltau(y_true, y_pred)
 
     return {
         "target": target,
-        "rmse": rmse,
         "mae": mae,
+        "mae_low_ci": mae_bootstrap.confidence_interval.low,
+        "mae_high_ci": mae_bootstrap.confidence_interval.high,
+        "rmse": rmse,
+        "rmse_low_ci": rmse_bootstrap.confidence_interval.low,
+        "rmse_high_ci": rmse_bootstrap.confidence_interval.high,
         "r2": r2,
         "kendall_tau": tau,
         "kendall_tau_pvalue": tau_pvalue,
@@ -29,6 +40,8 @@ def compute_metrics(y_true, y_pred, target):
 def mae_statistic(errors):
     return np.mean(errors)
 
+def rmse_statistic(errors):
+    return np.sqrt(np.mean(errors))
 
 truth_df = pd.read_csv(TEST)
 
@@ -116,10 +129,6 @@ mlm_ens_pred = test_df["MLM CLint pred_ensemble_mean"].to_numpy()
 
 hlm_metrics_dict = compute_metrics(hlm, hlm_ens_pred, target="HLM CLint")
 mlm_metrics_dict = compute_metrics(mlm, mlm_ens_pred, target = "MLM CLint")
-
-abs_error = np.abs(hlm - hlm_ens_pred)
-mae_bs = bootstrap((abs_error,), mae_statistic, n_resamples=1000, confidence_level=0.95)
-print(f"MAE CI: {mae_bs.confidence_interval.high} to {mae_bs.confidence_interval.low}")
 
 
 hlm_metrics_df = pd.DataFrame([hlm_metrics_dict])
