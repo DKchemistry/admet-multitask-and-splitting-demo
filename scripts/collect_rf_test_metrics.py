@@ -2,8 +2,9 @@ import os
 import glob
 import pathlib
 import pandas as pd
+import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from scipy.stats import kendalltau
+from scipy.stats import bootstrap, kendalltau
 
 RESULTS_CSVS = "results/hlm_mlm_test_rf_ecfp4/**/*lm_predictions.csv"
 TEST = "data/processed/hlm_mlm_paired_log10_test.csv"
@@ -24,6 +25,9 @@ def compute_metrics(y_true, y_pred, target):
         "kendall_tau": tau,
         "kendall_tau_pvalue": tau_pvalue,
     }
+
+def mae_statistic(errors):
+    return np.mean(errors)
 
 
 truth_df = pd.read_csv(TEST)
@@ -103,14 +107,20 @@ print(f"Wrote {per_mol_pred_path}")
 # Now we need the ensemble_metrics dataframe
 # We could do this with a loop but its overkill
 
-hlm = test_df["HLM CLint"].values.tolist()
-mlm = test_df["MLM CLint"].values.tolist() 
+#! will this work as np? seems to be fine
+hlm = test_df["HLM CLint"].to_numpy()
+mlm = test_df["MLM CLint"].to_numpy() 
 
-hlm_ens_pred = test_df["HLM CLint pred_ensemble_mean"].values.tolist()
-mlm_ens_pred = test_df["MLM CLint pred_ensemble_mean"].values.tolist() 
+hlm_ens_pred = test_df["HLM CLint pred_ensemble_mean"].to_numpy()
+mlm_ens_pred = test_df["MLM CLint pred_ensemble_mean"].to_numpy() 
 
 hlm_metrics_dict = compute_metrics(hlm, hlm_ens_pred, target="HLM CLint")
 mlm_metrics_dict = compute_metrics(mlm, mlm_ens_pred, target = "MLM CLint")
+
+abs_error = np.abs(hlm - hlm_ens_pred)
+mae_bs = bootstrap((abs_error,), mae_statistic, n_resamples=1000, confidence_level=0.95)
+print(f"MAE CI: {mae_bs.confidence_interval.high} to {mae_bs.confidence_interval.low}")
+
 
 hlm_metrics_df = pd.DataFrame([hlm_metrics_dict])
 mlm_metrics_df = pd.DataFrame([mlm_metrics_dict])
