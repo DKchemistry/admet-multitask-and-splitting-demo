@@ -250,7 +250,6 @@ We again see the improved MAE performance of the CheMeleon foundation model comp
 
 For HLM scaffold splitting, MAE is rank ordered as: ChemProp_ST_FM = ChemProp_MT_FM < RF_ECFP4 < ChemProp_ST = Chemprop_MT.
 
-
 ![Scaffold MLM Tukey HSD plot](figures/scaffold_mlm_tukey_vs_best_mae.png)
 
 For MLM scaffold splitting, MAE is rank ordered as: ChemProp_MT_FM = ChemProp_ST_FM = RF_ECFP4 < ChemProp_ST = Chemprop_MT.
@@ -267,15 +266,15 @@ For MLM butina splitting, MAE is rank ordered as ChemProp_MT_FM = ChemProp_ST_FM
 
 ## Thoughts
 
-While exact rank ordering and signifigance changes per task and splitting method, the usage of the foundation model routinely outperforms de novo ChemProp. 
+While exact rank ordering and signifigance changes per task and splitting method, the usage of the foundation model routinely outperforms de novo ChemProp, RF tends to sit in between the two. 
 
 However, now we get to the bigger issue with the question that motivated this post. Regardless of exact rank ordering, we need to think about what it means for some split to better inform actual deployment. For RF, this is reasonably straightforward. We train on all the data, we predict on test, we collect metrics. For chemprop, or other deep methods that require a validation set for early stopping, we will end up having to split data again in some fashion. This decision is likely to affect deployment performance, making it very difficult to answer the question of "which split best informs deployment?". Still, I don't want to end this post here, so I'll continue outlining my thoughts. I see two "reasonable" approaches to what we could do here. 
 
 1. Ensemble Prediction: We train the chemprop models under a 5x5-CV regime, but we no longer need an inner split to act as a test set. 
 
-2. Temporal Split: Another approach could be to use a temporal split for the deep methods. For example, training on the first 80% of the training data, reserving 20% for validation, and then predicting on the competition test set. 
+2. Temporal Split: We train the chemprop models on the first X% of the training data, reserving the last Y% for validation. 
 
-Both seem reasonable to me and there are likely other approaches (perhaps better ones) one could take in terms of a sincere effort towards prospective deployment. The advantage of the ensemble prediction approach is that the ensemble will see all the data in the aggregate, the advantage of temporal splits is we are mimicking distribution of the data in a realistic medicinal chemistry context. These do not need to even be diametrically opposed, one could envision deployment strategies that have both a 5x5-CV derived models and temporally derived models. However, as we do not want to tune submission strategies, we need to decide on some possible approach. My hypothesis is that the broad trends observed in split strategies here will remain for a sensible deployment strategy: CheMeleon based chemprop models will outperform naive chemprop models, and RF will sit between them. 
+Both seem reasonable to me and there are likely other approaches (perhaps better ones) one could take in terms of a sincere effort towards prospective deployment. The advantage of the ensemble prediction approach is that the ensemble will see all the data in the aggregate, the advantage of temporal splits is we are mimicking distribution of the data in a realistic medicinal chemistry context. These do not need to be diametrically opposed, one could envision deployment strategies that have both a 5x5-CV derived models and temporally derived models. However, as we do not want to tune submission strategies, we need to decide on some possible approach. My hypothesis is that the broad trends observed in split strategies (CheMeleon is better than RF, RF is better than Chemprop) here will remain for a 'sensible' deployment strategy.
 
 My naive take is that temporal set up is likely more reflective of the data, though it comes with an obvious downside: the latest compounds will only be present in validation and not in training. If those compounds are vital to train our models how to predict later chemical space, we will have missed them. As an aside, I would like to caveat my claim that "temporal is likely more reflective of the data". Medicinal chemistry campaigns can and will return to an earlier chemical series given SAR of later series. Perhaps some R-group liability was solved in pivoting to another series, only for that series to hit a dead-end for another reason, and the focus may shift to an earlier series with the added benefit of SAR gained from the later series (said another way, medicinal chemistry campaigns are temporal, but not strictly linear). That being said, in my experience, this is not the most usual chain of events ([SAR is often non-additive](https://pubs.acs.org/doi/10.1021/jm100112j)). As such, while I would very much hesistate to call the deployment data split "arbitrary" (it likely isn't), it appears to be difficult to predict the optimal split a priori. For the sake of this post, I will move forward with an 80/20 temporal split for the chemprop methods, but it might be interesting to return with other deployment "recipes" in the future.  
 
@@ -364,8 +363,5 @@ Third, stepping away from looking at this through the lens of a competition lead
 While I don't believe this was the best of research questions to pose (and I struggle to think of a way to make it more relevant), it was worthwhile to learn by doing. I got to ask questions to more experienced folks at the OpenADMET team, try out multitask GNNs, implement statistical tests I haven't tried before, and use some techniques I have only read about but never needed to implement (i.e., bootstrapping).  
 
 This write up took quite awhile as I needed to rerun a fair amount of models due to not implementing 5x5-CV correctly the first time. Re-reading my workflow now, there are some additional mistakes and shortcomings. First, there was zero reason to drop unpaired test compounds (which I imagine misrepresent the performance of ST vs MT methods). Second, I had originally intended on parity plots and some analysis of if certain chemotypes were better predicted by certain models, but I didn't quite get there. The data is available if anyone wants to look. 
-
-Finally, on a more personal note, I also took a break from LLM code generation towards the end (metric collection/bootstrapping/notebooks) as I didn't want my code skills to atrophy and often found the LLM generated code overly abstracted and obtuse. It was fun to take this post at a slower pace and enjoy writing some code again. I think for future side-projects like this, I will try to write more and more manual code, as I think it helps a lot with staying fresh and understanding the process.
-
 
 
