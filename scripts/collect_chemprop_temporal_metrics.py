@@ -3,13 +3,80 @@ import glob
 import pathlib
 import pandas as pd
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from scipy.stats import kendalltau
+from scipy.stats import bootstrap, kendalltau
+import numpy as np
 
 RESULTS_CSVS = "results/hlm_mlm_temporal_80_20_test/**/predictions.csv"
 TEST = "data/processed/hlm_mlm_paired_log10_test.csv" 
 SUMMARY_DIR = "results/hlm_mlm_temporal_80_20_test/summary"
 
 list_of_dfs = []
+
+
+def mae_statistic(errors):
+    return np.mean(errors)
+
+
+def rmse_statistic(errors):
+    return np.sqrt(np.mean(errors))
+
+
+def r2_statistic(y_true, y_pred):
+    return r2_score(y_true, y_pred)
+
+
+def kendall_tau_statistic(y_true, y_pred):
+    return kendalltau(y_true, y_pred).statistic
+
+
+def compute_metrics(y_true, y_pred, target):
+    mae = mean_absolute_error(y_true, y_pred)
+    abs_errors = np.abs(y_true - y_pred)
+    mae_bootstrap = bootstrap(
+        (abs_errors,), mae_statistic, n_resamples=1000, confidence_level=0.95
+    )
+
+    rmse = mean_squared_error(y_true, y_pred) ** 0.5
+    sq_errors = abs_errors**2
+    rmse_bootstrap = bootstrap(
+        (sq_errors,), rmse_statistic, n_resamples=1000, confidence_level=0.95
+    )
+
+    r2 = r2_score(y_true, y_pred)
+    r2_bootstrap = bootstrap(
+        (y_true, y_pred),
+        r2_statistic,
+        n_resamples=1000,
+        paired=True,
+        confidence_level=0.95,
+    )
+
+    tau, tau_pvalue = kendalltau(y_true, y_pred)
+    tau_bootstrap = bootstrap(
+        (y_true, y_pred),
+        kendall_tau_statistic,
+        n_resamples=1000,
+        paired=True,
+        confidence_level=0.95,
+    )
+
+    return {
+        "target": target,
+        "mae": mae,
+        "mae_low_ci": mae_bootstrap.confidence_interval.low,
+        "mae_high_ci": mae_bootstrap.confidence_interval.high,
+        "rmse": rmse,
+        "rmse_low_ci": rmse_bootstrap.confidence_interval.low,
+        "rmse_high_ci": rmse_bootstrap.confidence_interval.high,
+        "r2": r2,
+        "r2_low_ci": r2_bootstrap.confidence_interval.low,
+        "r2_high_ci": r2_bootstrap.confidence_interval.high,
+        "kendall_tau": tau,
+        "kendall_tau_low_ci": tau_bootstrap.confidence_interval.low,
+        "kendall_tau_high_ci": tau_bootstrap.confidence_interval.high,
+        "kendall_tau_pvalue": tau_pvalue,
+    }
+
 
 def collect_dataframes():
     for filename in glob.glob(RESULTS_CSVS, recursive=True):
@@ -84,53 +151,27 @@ def main():
     ensemble_metrics_dfs = []
     for col in test_df.columns:
         if col.startswith("HLM CLint") and col.endswith("mean"):
-            hlm_truth_col_list = test_df["HLM CLint"].values.tolist()
-            hlm_pred_col_list = test_df[col].values.tolist()
-            rmse = mean_squared_error(hlm_truth_col_list, hlm_pred_col_list) ** 0.5
-            mae = mean_absolute_error(hlm_truth_col_list, hlm_pred_col_list)
-            r2 = r2_score(hlm_truth_col_list, hlm_pred_col_list)
-            tau, tau_pvalue = kendalltau(hlm_truth_col_list, hlm_pred_col_list)
+            hlm_truth_col_list = test_df["HLM CLint"].to_numpy()
+            hlm_pred_col_list = test_df[col].to_numpy()
+
+            hlm_metrics_dict = compute_metrics(hlm_truth_col_list, hlm_pred_col_list, target="HLM CLint")
+            hlm_metrics_df = pd.DataFrame([hlm_metrics_dict])
 
             model_family_name = col.split(" ")[2].removesuffix("_mean")
+            hlm_metrics_df["model_family"] = model_family_name
 
-            hlm_metrics_df = pd.DataFrame(
-                [
-                    {
-                        "target": "HLM CLint",
-                        "model_family": model_family_name,
-                        "rmse": rmse,
-                        "mae": mae,
-                        "r2": r2,
-                        "kendall_tau": tau,
-                        "kendall_tau_pvalue": tau_pvalue,
-                    }
-                ]
-            )
             ensemble_metrics_dfs.append(hlm_metrics_df)
 
         if col.startswith("MLM CLint") and col.endswith("mean"):
-            mlm_truth_col_list = test_df["MLM CLint"].values.tolist()
-            mlm_pred_col_list = test_df[col].values.tolist()
-            rmse = mean_squared_error(mlm_truth_col_list, mlm_pred_col_list) ** 0.5
-            mae = mean_absolute_error(mlm_truth_col_list, mlm_pred_col_list)
-            r2 = r2_score(mlm_truth_col_list, mlm_pred_col_list)
-            tau, tau_pvalue = kendalltau(mlm_truth_col_list, mlm_pred_col_list)
+            mlm_truth_col_list = test_df["MLM CLint"].to_numpy()
+            mlm_pred_col_list = test_df[col].to_numpy()
+
+            mlm_metrics_dict = compute_metrics(mlm_truth_col_list, mlm_pred_col_list, target = "MLM CLint")
+            mlm_metrics_df = pd.DataFrame([mlm_metrics_dict])
 
             model_family_name = col.split(" ")[2].removesuffix("_mean")
+            mlm_metrics_df["model_family"] = model_family_name
 
-            mlm_metrics_df = pd.DataFrame(
-                [
-                    {
-                        "target": "MLM CLint",
-                        "model_family": model_family_name,
-                        "rmse": rmse,
-                        "mae": mae,
-                        "r2": r2,
-                        "kendall_tau": tau,
-                        "kendall_tau_pvalue": tau_pvalue,
-                    }
-                ]
-            )
             ensemble_metrics_dfs.append(mlm_metrics_df)
 
     ensemble_metrics_df = pd.concat(ensemble_metrics_dfs)
