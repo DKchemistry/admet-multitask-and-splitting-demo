@@ -1,5 +1,0 @@
-model_family,variant,task,mae_mean,mae_std,rmse_mean,rmse_std,r2_mean,r2_std
-rf,multi,HLM CLint,42.2202,4.6133,108.7416,16.3696,0.2391,0.0887
-rf,multi,MLM CLint,466.4443,39.0785,887.5852,86.1435,0.2513,0.0601
-rf,single_HLM CLint,HLM CLint,44.3871,5.4431,113.5171,17.3736,0.1635,0.1729
-rf,single_MLM CLint,MLM CLint,466.7943,39.1815,888.0806,86.4179,0.2505,0.0598

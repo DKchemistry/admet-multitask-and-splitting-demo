@@ -1,5 +1,0 @@
-model,task,mae_mean,mae_std,rmse_mean,rmse_std,r2_mean,r2_std
-multi,efflux,6.4079,0.1279,12.758,0.1974,0.1141,0.0273
-multi,papp,5.6983,0.1322,7.6789,0.1683,0.1742,0.0363
-single,efflux,6.303,0.3295,12.5881,0.1087,0.1376,0.0149
-single,papp,5.7168,0.1756,7.3348,0.0359,0.2468,0.0074
