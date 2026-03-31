@@ -236,7 +236,7 @@ Let's look at how the models compare within a split.
 
 In random splitting for the HLM task, the MAE metrics are ordered best to worst as: ChemProp_ST_FM = ChemProp_MT_FM < RF_ECFP4 < ChemProp_ST < Chemprop_MT. FM here is foundation model (i.e., CheMeleon). Though, from this plot, it's only straightforward to compare ChemProp_ST_FM (the method with lowest mean MAE) to the rest; as the color coding is blue = method being compared, grey = statistically similar method to blue, red = statistically dissimilar to blue. We can consult the table in the jupyter notebook to see if we can reject the null for the comparison of ChemProp_ST and Chemprop_MT (we can indeed reject the null). 
 
-A few things to note here. (1) This is partially why I think the question motivating this repo was flawed. As methods can be statistically similar, we can not confidently rank ChemProp_ST_FM as better than ChemProp_MT_FM here, which can make downstream comparisons difficult. There is however a bigger issue that we will get to later. (2) We do however see that the usage of the CheMeleon foundation model consistently outperforms de novo ChemProp and RF, which is interesting IMO. 
+A few things to note here. (1) This is partially why I think the question motivating this repo was flawed. As methods can be statistically similar, we can not confidently rank ChemProp_ST_FM as better than ChemProp_MT_FM here, which can make downstream comparisons difficult. There is however a bigger issue that we will get to later. (2) We do however see that the usage of the CheMeleon foundation model outperformed de novo ChemProp and RF here, which is interesting IMO. 
 
 Let's see how MLM fares in this same split. 
 
