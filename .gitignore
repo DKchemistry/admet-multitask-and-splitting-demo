@@ -27,3 +27,6 @@ results/rf_val_predictions_seed0.csv
 results/cv5x5/rf_ecfp4/val_predictions_iter*_fold*.csv
 results/cv5x5_hlm_mlm/rf_ecfp4/val_predictions_iter*_fold*.csv
 results/cv5x5_rf/rf_val_predictions_iter*_fold*_seed*.csv
+scratch.md
+scratch/
+*.pt
